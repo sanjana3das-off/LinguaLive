@@ -157,8 +157,11 @@ export function LinguaLive() {
   };
 
   const playAudio = async (item: TranslationRecord) => {
-    if (audioRef.current && item.audioDataUri) {
-      audioRef.current.src = item.audioDataUri;
+    if (audioRef.current && isPlaying === item.id) {
+      return;
+    }
+    
+    if (audioRef.current && audioRef.current.src === item.audioDataUri && item.audioDataUri) {
       audioRef.current.play();
       return;
     }
@@ -168,16 +171,33 @@ export function LinguaLive() {
       const targetLangVoice = findLanguageByCode(item.targetLanguage)?.voice;
       if (!targetLangVoice) throw new Error('Voice not found for language.');
 
-      const ttsResult = await textToSpeech({
-        text: item.translatedText,
-        voice: targetLangVoice,
-      });
+      let audioData = item.audioDataUri;
+      if (!audioData) {
+        const ttsResult = await textToSpeech({
+          text: item.translatedText,
+          voice: targetLangVoice,
+        });
+        audioData = ttsResult.audio;
+        setHistory(prev => prev.map(r => r.id === item.id ? {...r, audioDataUri: audioData} : r));
+      }
       
-      setHistory(prev => prev.map(r => r.id === item.id ? {...r, audioDataUri: ttsResult.audio} : r));
-
-      if (audioRef.current && ttsResult.audio) {
-        audioRef.current.src = ttsResult.audio;
-        audioRef.current.play();
+      if (audioRef.current && audioData) {
+        audioRef.current.src = audioData;
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            // Automatic playback started!
+            setIsPlaying(null);
+          }).catch(error => {
+            console.error("Playback failed", error);
+            setIsPlaying(null);
+          });
+        }
+         audioRef.current.onended = () => {
+           setIsPlaying(null);
+         };
+      } else {
+        setIsPlaying(null);
       }
     } catch (error) {
        console.error('TTS failed:', error);
@@ -187,7 +207,6 @@ export function LinguaLive() {
           'Could not generate audio. Please try again later.',
         variant: 'destructive',
       });
-    } finally {
       setIsPlaying(null);
     }
   };
