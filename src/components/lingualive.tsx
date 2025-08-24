@@ -91,6 +91,67 @@ export function LinguaLive() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isListening]);
 
+  const playAudio = async (item: TranslationRecord) => {
+    if (audioRef.current && isPlaying === item.id) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(null);
+      return;
+    }
+
+    if (item.audioDataUri && audioRef.current) {
+      audioRef.current.src = item.audioDataUri;
+      audioRef.current.play();
+      setIsPlaying(item.id);
+      audioRef.current.onended = () => setIsPlaying(null);
+      return;
+    }
+
+    setIsPlaying(item.id);
+    try {
+      const targetLangVoice = findLanguageByCode(item.targetLanguage)?.voice;
+      if (!targetLangVoice) throw new Error('Voice not found for language.');
+
+      let audioData = item.audioDataUri;
+      if (!audioData) {
+        const ttsResult = await textToSpeech({
+          text: item.translatedText,
+          voice: targetLangVoice,
+        });
+        audioData = ttsResult.audio;
+        setHistory(prev => prev.map(r => r.id === item.id ? {...r, audioDataUri: audioData} : r));
+      }
+      
+      if (audioRef.current && audioData) {
+        audioRef.current.src = audioData;
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            console.error("Playback failed", error);
+            toast({
+              title: 'Audio Error',
+              description: 'Could not play audio automatically. Please click the play button.',
+              variant: 'destructive',
+            });
+            setIsPlaying(null);
+          });
+        }
+         audioRef.current.onended = () => {
+           setIsPlaying(null);
+         };
+      }
+    } catch (error) {
+       console.error('TTS failed:', error);
+      toast({
+        title: 'Audio Error',
+        description:
+          'Could not generate audio. Please try again later.',
+        variant: 'destructive',
+      });
+      setIsPlaying(null);
+    }
+  };
+
   const handleTranslation = async (text: string) => {
     if (!text.trim()) return;
 
@@ -124,6 +185,8 @@ export function LinguaLive() {
       };
 
       setHistory((prev) => [newRecord, ...prev].slice(0, 50)); // Keep last 50 records
+      
+      await playAudio(newRecord);
 
     } catch (error) {
       console.error('Translation failed:', error);
@@ -153,61 +216,6 @@ export function LinguaLive() {
       setCurrentTranscript('');
       setTranslatedText('');
       startListening();
-    }
-  };
-
-  const playAudio = async (item: TranslationRecord) => {
-    if (audioRef.current && isPlaying === item.id) {
-      return;
-    }
-    
-    if (audioRef.current && audioRef.current.src === item.audioDataUri && item.audioDataUri) {
-      audioRef.current.play();
-      return;
-    }
-
-    setIsPlaying(item.id);
-    try {
-      const targetLangVoice = findLanguageByCode(item.targetLanguage)?.voice;
-      if (!targetLangVoice) throw new Error('Voice not found for language.');
-
-      let audioData = item.audioDataUri;
-      if (!audioData) {
-        const ttsResult = await textToSpeech({
-          text: item.translatedText,
-          voice: targetLangVoice,
-        });
-        audioData = ttsResult.audio;
-        setHistory(prev => prev.map(r => r.id === item.id ? {...r, audioDataUri: audioData} : r));
-      }
-      
-      if (audioRef.current && audioData) {
-        audioRef.current.src = audioData;
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            // Automatic playback started!
-            setIsPlaying(null);
-          }).catch(error => {
-            console.error("Playback failed", error);
-            setIsPlaying(null);
-          });
-        }
-         audioRef.current.onended = () => {
-           setIsPlaying(null);
-         };
-      } else {
-        setIsPlaying(null);
-      }
-    } catch (error) {
-       console.error('TTS failed:', error);
-      toast({
-        title: 'Audio Error',
-        description:
-          'Could not generate audio. Please try again later.',
-        variant: 'destructive',
-      });
-      setIsPlaying(null);
     }
   };
 
