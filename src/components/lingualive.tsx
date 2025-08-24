@@ -107,6 +107,12 @@ export function LinguaLive() {
       
       // If audio data doesn't exist, generate it
       if (!audioData) {
+        if (!item.translatedText.trim()) {
+           // Don't try to generate audio for empty text
+           setIsPlaying(null);
+           return;
+        }
+
         const targetLangVoice = findLanguageByCode(item.targetLanguage)?.voice;
         if (!targetLangVoice) throw new Error('Voice not found for language.');
 
@@ -115,6 +121,15 @@ export function LinguaLive() {
           voice: targetLangVoice,
         });
         audioData = ttsResult.audio;
+        
+        if (!audioData) {
+          setIsPlaying(null);
+          // Audio generation might have failed, but we still update the history with a null URI
+          // to prevent retrying automatically. The user can still retry manually.
+          setHistory(prev => prev.map(r => r.id === item.id ? {...r, audioDataUri: null} : r));
+          return;
+        }
+
         // Update history with the new audio data
         setHistory(prev => prev.map(r => r.id === item.id ? {...r, audioDataUri: audioData} : r));
       }
@@ -146,6 +161,8 @@ export function LinguaLive() {
             });
             setIsPlaying(null);
         };
+      } else {
+        setIsPlaying(null);
       }
     } catch (error: any) {
       console.error('TTS failed:', error);

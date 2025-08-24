@@ -48,7 +48,9 @@ const textToSpeechFlow = ai.defineFlow(
     });
 
     if (!output || !output.media) {
-      throw new Error('no media returned');
+      // In case of no media, we'll return an empty audio string
+      // and let the client handle it.
+      return { audio: '' };
     }
 
     const media = output.media;
