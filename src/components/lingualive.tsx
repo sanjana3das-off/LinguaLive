@@ -46,6 +46,7 @@ export function LinguaLive() {
   );
   const [history, setHistory] = useState<TranslationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [translatedText, setTranslatedText] = useState('');
   const [currentTranscript, setCurrentTranscript] = useState('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -99,9 +100,8 @@ export function LinguaLive() {
     try {
       const sourceLangName = findLanguageByCode(sourceLanguage)?.name;
       const targetLangName = findLanguageByCode(targetLanguage)?.name;
-      const targetLangVoice = findLanguageByCode(targetLanguage)?.voice;
-
-      if (!sourceLangName || !targetLangName || !targetLangVoice) {
+      
+      if (!sourceLangName || !targetLangName) {
         throw new Error('Invalid language selection');
       }
 
@@ -113,27 +113,18 @@ export function LinguaLive() {
       const finalTranslatedText = translationResult.translatedText;
       setTranslatedText(finalTranslatedText);
 
-      const ttsResult = await textToSpeech({
-        text: finalTranslatedText,
-        voice: targetLangVoice,
-      });
-
       const newRecord: TranslationRecord = {
         id: Date.now().toString(),
         sourceText: text,
         translatedText: finalTranslatedText,
         sourceLanguage: sourceLanguage,
         targetLanguage: targetLanguage,
-        audioDataUri: ttsResult.audio,
+        audioDataUri: null,
         timestamp: Date.now(),
       };
 
       setHistory((prev) => [newRecord, ...prev].slice(0, 50)); // Keep last 50 records
 
-      if (audioRef.current && ttsResult.audio) {
-        audioRef.current.src = ttsResult.audio;
-        audioRef.current.play();
-      }
     } catch (error) {
       console.error('Translation failed:', error);
       toast({
@@ -165,10 +156,39 @@ export function LinguaLive() {
     }
   };
 
-  const playAudio = (audioDataUri: string | null) => {
-    if (audioRef.current && audioDataUri) {
-      audioRef.current.src = audioDataUri;
+  const playAudio = async (item: TranslationRecord) => {
+    if (audioRef.current && item.audioDataUri) {
+      audioRef.current.src = item.audioDataUri;
       audioRef.current.play();
+      return;
+    }
+
+    setIsPlaying(item.id);
+    try {
+      const targetLangVoice = findLanguageByCode(item.targetLanguage)?.voice;
+      if (!targetLangVoice) throw new Error('Voice not found for language.');
+
+      const ttsResult = await textToSpeech({
+        text: item.translatedText,
+        voice: targetLangVoice,
+      });
+      
+      setHistory(prev => prev.map(r => r.id === item.id ? {...r, audioDataUri: ttsResult.audio} : r));
+
+      if (audioRef.current && ttsResult.audio) {
+        audioRef.current.src = ttsResult.audio;
+        audioRef.current.play();
+      }
+    } catch (error) {
+       console.error('TTS failed:', error);
+      toast({
+        title: 'Audio Error',
+        description:
+          'Could not generate audio. Please try again later.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPlaying(null);
     }
   };
 
@@ -310,8 +330,8 @@ export function LinguaLive() {
                         <p className="text-xs text-muted-foreground">
                           {findLanguageByCode(item.sourceLanguage)?.name} &rarr; {findLanguageByCode(item.targetLanguage)?.name}
                         </p>
-                        <Button variant="ghost" size="icon" onClick={() => playAudio(item.audioDataUri)} aria-label="Play audio" disabled={!item.audioDataUri}>
-                           <Volume2 className="w-4 h-4"/>
+                        <Button variant="ghost" size="icon" onClick={() => playAudio(item)} aria-label="Play audio" disabled={isPlaying === item.id}>
+                          {isPlaying === item.id ? <Loader2 className="w-4 h-4 animate-spin"/> : <Volume2 className="w-4 h-4"/>}
                         </Button>
                       </div>
                     </div>
