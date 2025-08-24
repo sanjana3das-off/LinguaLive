@@ -34,7 +34,7 @@ const textToSpeechFlow = ai.defineFlow(
     outputSchema: TextToSpeechOutputSchema,
   },
   async (input) => {
-    const {media} = await ai.generate({
+    const {output} = await ai.generate({
       model: 'googleai/gemini-2.5-flash-preview-tts',
       config: {
         responseModalities: ['AUDIO'],
@@ -46,6 +46,8 @@ const textToSpeechFlow = ai.defineFlow(
       },
       prompt: input.text,
     });
+
+    const media = output.media;
 
     if (!media) {
       throw new Error('no media returned');
@@ -88,4 +90,3 @@ async function toWav(
     writer.end();
   });
 }
-
