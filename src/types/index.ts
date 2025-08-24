@@ -12,4 +12,5 @@ export interface TranslationRecord {
   targetLanguage: string;
   audioDataUri: string | null;
   timestamp: number;
+  error?: string;
 }

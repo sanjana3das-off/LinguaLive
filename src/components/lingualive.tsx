@@ -13,6 +13,7 @@ import {
   MicOff,
   Trash2,
   Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -99,6 +100,10 @@ export function LinguaLive() {
       return;
     }
 
+    if(item.error) {
+      return; // Don't try to play if there's a known error
+    }
+
     // Set loading state for the specific item
     setIsPlaying(item.id);
 
@@ -124,9 +129,7 @@ export function LinguaLive() {
         
         if (!audioData) {
           setIsPlaying(null);
-          // Audio generation might have failed, but we still update the history with a null URI
-          // to prevent retrying automatically. The user can still retry manually.
-          setHistory(prev => prev.map(r => r.id === item.id ? {...r, audioDataUri: null} : r));
+          setHistory(prev => prev.map(r => r.id === item.id ? {...r, error: 'Audio generation failed.'} : r));
           return;
         }
 
@@ -142,11 +145,6 @@ export function LinguaLive() {
             // Audio started playing successfully
           }).catch(error => {
             console.error("Playback failed", error);
-            toast({
-              title: 'Audio Error',
-              description: 'Could not play audio automatically. Please click the play button.',
-              variant: 'destructive',
-            });
             setIsPlaying(null);
           });
         }
@@ -154,11 +152,6 @@ export function LinguaLive() {
           setIsPlaying(null);
         };
         audioRef.current.onerror = () => {
-            toast({
-                title: 'Audio Error',
-                description: 'Could not play audio file.',
-                variant: 'destructive',
-            });
             setIsPlaying(null);
         };
       } else {
@@ -166,15 +159,11 @@ export function LinguaLive() {
       }
     } catch (error: any) {
       console.error('TTS failed:', error);
-      let description = 'Could not generate audio. Please try again later.';
-      if (error.message && error.message.includes('429')) {
-        description = 'You have exceeded the free API quota for text-to-speech. Please try again later.';
+      let errorMessage = 'Could not generate audio.';
+      if (error.message && (error.message.includes('429') || error.message.toLowerCase().includes('quota'))) {
+        errorMessage = 'API limit reached.';
       }
-      toast({
-        title: 'Audio Error',
-        description,
-        variant: 'destructive',
-      });
+       setHistory(prev => prev.map(r => r.id === item.id ? {...r, error: errorMessage} : r));
       setIsPlaying(null);
     }
   };
@@ -384,10 +373,13 @@ export function LinguaLive() {
                         <p className="text-xs text-muted-foreground">
                           {findLanguageByCode(item.sourceLanguage)?.name} &rarr; {findLanguageByCode(item.targetLanguage)?.name}
                         </p>
-                        <Button variant="ghost" size="icon" onClick={() => playAudio(item)} aria-label="Play audio" disabled={isPlaying === item.id}>
-                          {isPlaying === item.id ? <Loader2 className="w-4 h-4 animate-spin"/> : <Volume2 className="w-4 h-4"/>}
+                        <Button variant="ghost" size="icon" onClick={() => playAudio(item)} aria-label="Play audio" disabled={isPlaying === item.id || !!item.error}>
+                          {isPlaying === item.id ? <Loader2 className="w-4 h-4 animate-spin"/> : item.error ? <VolumeX className="w-4 h-4"/> : <Volume2 className="w-4 h-4"/>}
                         </Button>
                       </div>
+                      {item.error && (
+                        <p className="text-xs text-destructive mt-1">Voice not available: {item.error}</p>
+                      )}
                     </div>
                   ))}
                 </div>
