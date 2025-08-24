@@ -99,26 +99,23 @@ export function LinguaLive() {
       return;
     }
 
-    if (item.audioDataUri && audioRef.current) {
-      audioRef.current.src = item.audioDataUri;
-      audioRef.current.play();
-      setIsPlaying(item.id);
-      audioRef.current.onended = () => setIsPlaying(null);
-      return;
-    }
-
+    // Set loading state for the specific item
     setIsPlaying(item.id);
-    try {
-      const targetLangVoice = findLanguageByCode(item.targetLanguage)?.voice;
-      if (!targetLangVoice) throw new Error('Voice not found for language.');
 
+    try {
       let audioData = item.audioDataUri;
+      
+      // If audio data doesn't exist, generate it
       if (!audioData) {
+        const targetLangVoice = findLanguageByCode(item.targetLanguage)?.voice;
+        if (!targetLangVoice) throw new Error('Voice not found for language.');
+
         const ttsResult = await textToSpeech({
           text: item.translatedText,
           voice: targetLangVoice,
         });
         audioData = ttsResult.audio;
+        // Update history with the new audio data
         setHistory(prev => prev.map(r => r.id === item.id ? {...r, audioDataUri: audioData} : r));
       }
       
@@ -126,7 +123,9 @@ export function LinguaLive() {
         audioRef.current.src = audioData;
         const playPromise = audioRef.current.play();
         if (playPromise !== undefined) {
-          playPromise.catch(error => {
+          playPromise.then(() => {
+            // Audio started playing successfully
+          }).catch(error => {
             console.error("Playback failed", error);
             toast({
               title: 'Audio Error',
@@ -136,12 +135,20 @@ export function LinguaLive() {
             setIsPlaying(null);
           });
         }
-         audioRef.current.onended = () => {
-           setIsPlaying(null);
-         };
+        audioRef.current.onended = () => {
+          setIsPlaying(null);
+        };
+        audioRef.current.onerror = () => {
+            toast({
+                title: 'Audio Error',
+                description: 'Could not play audio file.',
+                variant: 'destructive',
+            });
+            setIsPlaying(null);
+        };
       }
     } catch (error: any) {
-       console.error('TTS failed:', error);
+      console.error('TTS failed:', error);
       let description = 'Could not generate audio. Please try again later.';
       if (error.message && error.message.includes('429')) {
         description = 'You have exceeded the free API quota for text-to-speech. Please try again later.';
@@ -154,6 +161,7 @@ export function LinguaLive() {
       setIsPlaying(null);
     }
   };
+
 
   const handleTranslation = async (text: string) => {
     if (!text.trim()) return;
@@ -188,6 +196,7 @@ export function LinguaLive() {
       };
 
       setHistory((prev) => [newRecord, ...prev].slice(0, 50)); // Keep last 50 records
+      await playAudio(newRecord);
       
     } catch (error) {
       console.error('Translation failed:', error);
