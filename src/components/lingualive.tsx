@@ -186,8 +186,6 @@ export function LinguaLive() {
 
       setHistory((prev) => [newRecord, ...prev].slice(0, 50)); // Keep last 50 records
       
-      await playAudio(newRecord);
-
     } catch (error) {
       console.error('Translation failed:', error);
       toast({
