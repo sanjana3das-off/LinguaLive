@@ -47,11 +47,11 @@ const textToSpeechFlow = ai.defineFlow(
       prompt: input.text,
     });
 
-    const media = output.media;
-
-    if (!media) {
+    if (!output || !output.media) {
       throw new Error('no media returned');
     }
+
+    const media = output.media;
 
     const audioBuffer = Buffer.from(
       media.url.substring(media.url.indexOf(',') + 1),
