@@ -140,12 +140,15 @@ export function LinguaLive() {
            setIsPlaying(null);
          };
       }
-    } catch (error) {
+    } catch (error: any) {
        console.error('TTS failed:', error);
+      let description = 'Could not generate audio. Please try again later.';
+      if (error.message && error.message.includes('429')) {
+        description = 'You have exceeded the free API quota for text-to-speech. Please try again later.';
+      }
       toast({
         title: 'Audio Error',
-        description:
-          'Could not generate audio. Please try again later.',
+        description,
         variant: 'destructive',
       });
       setIsPlaying(null);
